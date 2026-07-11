@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+
+<title>Home Run Derby</title>
+
+<style>
+
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#75c7ff;font-family:Arial;touch-action:none}
+
+canvas{display:block;width:100%;height:100%}
+
+#hud{position:fixed;top:15px;left:15px;right:15px;display:flex;justify-content:space-between;color:white;font-size:20px;font-weight:bold;text-shadow:0 2px 5px black}
+
+#msg{position:fixed;top:18%;left:0;right:0;text-align:center;color:white;font-size:34px;font-weight:bold;text-shadow:0 3px 6px black}
+
+#swing{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);width:190px;height:75px;border:0;border-radius:50px;background:#ffd43b;font-size:28px;font-weight:bold;box-shadow:0 7px 0 #b88700}
+
+#overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+
+#card{background:#12213e;color:white;padding:28px;border-radius:24px;text-align:center;max-width:400px}
+
+#play{width:100%;padding:16px;border:0;border-radius:50px;font-size:21px;font-weight:bold}
+
+</style>
+
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+
+<span id="score">HR: 0</span>
+
+<span id="outs">Outs: 0/10</span>
+
+</div>
+
+<div id="msg"></div>
+
+<button id="swing">SWING!</button>
+
+<div id="overlay">
+
+<div id="card">
+
+<h1>HOME RUN DERBY</h1>
+
+<p>Tap SWING when the ball reaches the plate.</p>
+
+<p>Perfect timing gives the longest home runs.</p>
+
+<button id="play">PLAY BALL</button>
+
+</div>
+
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+
+const ctx=canvas.getContext("2d");
+
+const scoreEl=document.getElementById("score");
+
+const outsEl=document.getElementById("outs");
+
+const msg=document.getElementById("msg");
+
+const overlay=document.getElementById("overlay");
+
+const play=document.getElementById("play");
+
+const swing=document.getElementById("swing");
+
+let W,H,dpr;
+
+let running=false;
+
+let last=0;
+
+let score=0;
+
+let outs=0;
+
+let phase="wait";
+
+let timer=0;
+
+let ball=null;
+
+let hitBall=null;
+
+function resize(){
+
+W=innerWidth;
+
+H=innerHeight;
+
+dpr=Math.min(devicePixelRatio||1,2);
+
+canvas.width=W*dpr;
+
+canvas.height=H*dpr;
+
+ctx.setTransform(dpr,0,0,dpr,0,0);
+
+}
+
+resize();
+
+addEventListener("resize",resize);
+
+function updateHud(){
+
+scoreEl.textContent="HR: "+score;
+
+outsEl.textContent="Outs: "+outs+"/10";
+
+}
+
+function showMessage(text){
+
+msg.textContent=text;
+
+setTimeout(()=>{if(msg.textContent===text)msg.textContent="";},900);
+
+}
+
+function startGame(){
+
+score=0;
+
+outs=0;
+
+phase="wait";
+
+timer=.8;
+
+ball=null;
+
+hitBall=null;
+
+running=true;
+
+overlay.style.display="none";
+
+updateHud();
+
+last=performance.now();
+
+requestAnimationFrame(loop);
+
+}
+
+play.onclick=startGame;
+
+function pitch(){
+
+phase="pitch";
+
+ball={t:0,duration:1.35};
+
+}
+
+function doSwing(){
+
+if(!running||phase!=="pitch")return;
+
+let timing=ball.t/ball.duration;
+
+let difference=Math.abs(timing-.88);
+
+if(difference<.055){
+
+score++;
+
+showMessage("PERFECT! 480 FT");
+
+hitBall={x:W*.63,y:H*.7,vx:250,vy:-500};
+
+phase="hit";
+
+updateHud();
+
+}
+
+else if(difference<.11){
+
+score++;
+
+showMessage("HOME RUN! 410 FT");
+
+hitBall={x:W*.63,y:H*.7,vx:220,vy:-420};
+
+phase="hit";
+
+updateHud();
+
+}
+
+else if(difference<.16){
+
+showMessage("DEEP FLY OUT!");
+
+makeOut();
+
+}
+
+else{
+
+showMessage("MISS!");
+
+makeOut();
+
+}
+
+}
+
+swing.onclick=doSwing;
+
+swing.addEventListener("touchstart",e=>{
+
+e.preventDefault();
+
+doSwing();
+
+},{passive:false});
+
+function makeOut(){
+
+outs++;
+
+updateHud();
+
+ball=null;
+
+phase="wait";
+
+timer=.8;
+
+if(outs>=10){
+
+running=false;
+
+overlay.style.display="flex";
+
+document.getElementById("card").innerHTML=
+
+"<h1>DERBY OVER</h1><p>You hit <b>"+score+"</b> home runs!</p><button id='again'>PLAY AGAIN</button>";
+
+document.getElementById("again").onclick=startGame;
+
+}
+
+}
+
+function update(dt){
+
+if(phase==="wait"){
+
+timer-=dt;
+
+if(timer<=0)pitch();
+
+}
+
+if(phase==="pitch"){
+
+ball.t+=dt;
+
+if(ball.t>ball.duration){
+
+showMessage("STRIKE!");
+
+makeOut();
+
+}
+
+}
+
+if(phase==="hit"&&hitBall){
+
+hitBall.vy+=520*dt;
+
+hitBall.x+=hitBall.vx*dt;
+
+hitBall.y+=hitBall.vy*dt;
+
+if(hitBall.y>H+50||hitBall.x>W+50){
+
+hitBall=null;
+
+ball=null;
+
+phase="wait";
+
+timer=.8;
+
+}
+
+}
+
+}
+
+function drawField(){
+
+let sky=ctx.createLinearGradient(0,0,0,H);
+
+sky.addColorStop(0,"#6bc4ff");
+
+sky.addColorStop(.55,"#e4f7ff");
+
+sky.addColorStop(.56,"#4ca343");
+
+sky.addColorStop(1,"#23772d");
+
+ctx.fillStyle=sky;
+
+ctx.fillRect(0,0,W,H);
+
+ctx.fillStyle="#9b6a3c";
+
+ctx.beginPath();
+
+ctx.moveTo(W*.5,H*.55);
+
+ctx.lineTo(W*.95,H);
+
+ctx.lineTo(W*.05,H);
+
+ctx.closePath();
+
+ctx.fill();
+
+ctx.fillStyle="#d8b07a";
+
+ctx.beginPath();
+
+ctx.arc(W*.5,H*.65,W*.09,0,Math.PI*2);
+
+ctx.fill();
+
+ctx.fillStyle="white";
+
+ctx.fillRect(W*.59,H*.72,35,20);
+
+}
+
+function drawBatter(){
+
+let x=W*.66;
+
+let y=H*.69;
+
+ctx.strokeStyle="#111";
+
+ctx.lineWidth=8;
+
+ctx.lineCap="round";
+
+ctx.beginPath();
+
+ctx.moveTo(x,y-30);
+
+ctx.lineTo(x,y+15);
+
+ctx.moveTo(x,y-10);
+
+ctx.lineTo(x-25,y+5);
+
+ctx.moveTo(x,y-10);
+
+ctx.lineTo(x+22,y-30);
+
+ctx.moveTo(x,y+15);
+
+ctx.lineTo(x-18,y+50);
+
+ctx.moveTo(x,y+15);
+
+ctx.lineTo(x+18,y+50);
+
+ctx.stroke();
+
+ctx.fillStyle="#193b8c";
+
+ctx.beginPath();
+
+ctx.arc(x,y-48,17,0,Math.PI*2);
+
+ctx.fill();
+
+ctx.strokeStyle="#c28a45";
+
+ctx.lineWidth=7;
+
+ctx.beginPath();
+
+ctx.moveTo(x+20,y-28);
+
+ctx.lineTo(x+55,y-65);
+
+ctx.stroke();
+
+}
+
+function drawBall(){
+
+if(!ball)return;
+
+let progress=Math.min(1,ball.t/ball.duration);
+
+let eased=progress*progress;
+
+let startX=W*.48;
+
+let startY=H*.56;
+
+let endX=W*.62;
+
+let endY=H*.69;
+
+let x=startX+(endX-startX)*eased;
+
+let y=startY+(endY-startY)*eased;
+
+let r=4+progress*10;
+
+ctx.fillStyle="white";
+
+ctx.beginPath();
+
+ctx.arc(x,y,r,0,Math.PI*2);
+
+ctx.fill();
+
+ctx.strokeStyle="red";
+
+ctx.lineWidth=1;
+
+ctx.beginPath();
+
+ctx.arc(x,y,r*.55,-1,1);
+
+ctx.stroke();
+
+}
+
+function draw(){
+
+ctx.clearRect(0,0,W,H);
+
+drawField();
+
+drawBatter();
+
+drawBall();
+
+if(hitBall){
+
+ctx.fillStyle="white";
+
+ctx.beginPath();
+
+ctx.arc(hitBall.x,hitBall.y,9,0,Math.PI*2);
+
+ctx.fill();
+
+}
+
+}
+
+function loop(now){
+
+if(!running)return;
+
+let dt=Math.min(.033,(now-last)/1000);
+
+last=now;
+
+update(dt);
+
+draw();
+
+requestAnimationFrame(loop);
+
+}
+
+draw();
+
+</script>
+
+</body>
+
+</html>
